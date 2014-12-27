@@ -33,3 +33,32 @@ Feature: Manage WordPress rewrites
     Then STDOUT should be CSV containing:
       | match            | query                               | source   |
       | topic/([^/]+)/?$ | index.php?tag=$matches[1]           | post_tag |
+
+  Scenario: Missing permalink_structure
+    Given a WP install
+
+    When I run `wp option delete permalink_structure`
+    And I try `wp option get permalink_structure`
+    Then STDOUT should be empty
+
+    When I try `wp rewrite flush`
+    Then STDERR should contain:
+      """
+      Warning: Rewrite rules are empty, possibly because of a missing permalink_structure option.
+      """
+    And STDOUT should be empty
+
+    When I run `wp rewrite structure /%year%/%monthnum%/%day%/%postname%/`
+    Then I run `wp rewrite flush`
+    Then STDOUT should be empty
+
+  Scenario: Generate .htaccess on hard flush
+    Given a WP install
+    And a wp-cli.yml file:
+      """
+      apache_modules: [mod_rewrite]
+      """
+
+    When I run `wp rewrite structure /%year%/%monthnum%/%day%/%postname%/`
+    And I run `wp rewrite flush --hard`
+    Then the .htaccess file should exist

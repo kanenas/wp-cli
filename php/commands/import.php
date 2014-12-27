@@ -8,10 +8,10 @@ class Import_Command extends WP_CLI_Command {
 	 * ## OPTIONS
 	 *
 	 * <file>...
-	 * : Path to one or more valid WXR files for importing.
+	 * : Path to one or more valid WXR files for importing. Directories are also accepted.
 	 *
 	 * --authors=<authors>
-	 * : How the author mapping should be handled. Options are 'create', 'mapping.csv', or 'skip'. The first will create any non-existent users from the WXR file. The second will read author mapping associations from a CSV, or create a CSV for editing if the file path doesn't exist. The last option will skip any author mapping.
+	 * : How the author mapping should be handled. Options are 'create', 'mapping.csv', or 'skip'. The first will create any non-existent users from the WXR file. The second will read author mapping associations from a CSV, or create a CSV for editing if the file path doesn't exist. The CSV requires two columns, and a header row like "old_user_login,new_user_login". The last option will skip any author mapping.
 	 *
 	 * [--skip=<data-type>]
 	 * : Skip importing specific data. Supported options are: 'attachment' and 'image_resize' (skip time-consuming thumbnail generation).
@@ -35,6 +35,17 @@ class Import_Command extends WP_CLI_Command {
 		$this->add_wxr_filters();
 
 		WP_CLI::log( 'Starting the import process...' );
+
+		$new_args = array();
+		foreach( $args as $arg ) {
+			if ( is_dir( $arg ) ) {
+				$files = glob( rtrim( $arg, '/' ) . '/*.{wxr,xml}', GLOB_BRACE );
+				$new_args = array_merge( $new_args, $files );
+			} else {
+				$new_args[] = $arg;
+			}
+		}
+		$args = $new_args;
 
 		foreach ( $args as $file ) {
 			if ( ! is_readable( $file ) ) {
@@ -69,9 +80,11 @@ class Import_Command extends WP_CLI_Command {
 			$author = new \stdClass;
 			// Always in the WXR
 			$author->user_login = $wxr_author['author_login'];
-			$author->user_email = $wxr_author['author_email'];
 
 			// Should be in the WXR; no guarantees
+			if ( isset ( $wxr_author['author_email'] ) ) {
+				$author->user_email = $wxr_author['author_email'];
+			}
 			if ( isset( $wxr_author['author_display_name'] ) )
 				$author->display_name = $wxr_author['author_display_name'];
 			if ( isset( $wxr_author['author_first_name'] ) )

@@ -3,6 +3,11 @@
 /**
  * Manage comments.
  *
+ * ## EXAMPLES
+ *
+ *     # delete all spam comments.
+ *     wp comment delete $(wp comment list --status=spam --format=ids)
+ *
  * @package wp-cli
  */
 class Comment_Command extends \WP_CLI\CommandWithDBObject {
@@ -93,8 +98,11 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 	 * [--field=<field>]
 	 * : Instead of returning the whole comment, returns the value of a single field.
 	 *
+	 * [--fields=<fields>]
+	 * : Limit the output to specific fields. Defaults to all fields.
+	 *
 	 * [--format=<format>]
-	 * : Accepted values: table, json. Default: table
+	 * : Accepted values: table, json, csv. Default: table
 	 *
 	 * ## EXAMPLES
 	 *
@@ -103,8 +111,14 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 	public function get( $args, $assoc_args ) {
 		$comment_id = (int)$args[0];
 		$comment = get_comment( $comment_id );
-		if ( empty( $comment ) )
+		if ( empty( $comment ) ) {
 			WP_CLI::error( "Invalid comment ID." );
+		}
+
+		if ( empty( $assoc_args['fields'] ) ) {
+			$comment_array = get_object_vars( $comment );
+			$assoc_args['fields'] = array_keys( $comment_array );
+		}
 
 		$formatter = $this->get_formatter( $assoc_args );
 		$formatter->display_item( $comment );
@@ -122,10 +136,33 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 	 * : Prints the value of a single field for each comment.
 	 *
 	 * [--fields=<fields>]
-	 * : Limit the output to specific object fields. Defaults to comment_ID,comment_post_ID,comment_date,comment_approved,comment_author,comment_author_email
+	 * : Limit the output to specific object fields.
 	 *
 	 * [--format=<format>]
 	 * : Accepted values: table, csv, json, count. Default: table
+	 *
+	 * ## AVAILABLE FIELDS
+	 *
+	 * These fields will be displayed by default for each comment:
+	 *
+	 * * comment_ID
+	 * * comment_post_ID
+	 * * comment_date
+	 * * comment_approved
+	 * * comment_author
+	 * * comment_author_email
+	 *
+	 * These fields are optionally available:
+	 *
+	 * * comment_author_url
+	 * * comment_author_IP
+	 * * comment_date_gmt
+	 * * comment_content
+	 * * comment_karma
+	 * * comment_agent
+	 * * comment_type
+	 * * comment_parent
+	 * * user_id
 	 *
 	 * ## EXAMPLES
 	 *
@@ -137,11 +174,11 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 	 *
 	 * @subcommand list
 	 */
-	public function _list( $_, $assoc_args ) {
+	public function list_( $_, $assoc_args ) {
 		$formatter = $this->get_formatter( $assoc_args );
 
 		if ( 'ids' == $formatter->format )
-			$assoc_args['fields'] = 'ids';
+			$assoc_args['fields'] = 'comment_ID';
 
 		$query = new WP_Comment_Query();
 		$comments = $query->query( $assoc_args );
@@ -167,7 +204,7 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 	 * ## EXAMPLES
 	 *
 	 *     wp comment delete 1337 --force
-	 * 
+	 *
 	 *     wp comment delete 1337 2341 --force
 	 */
 	public function delete( $args, $assoc_args ) {
@@ -197,7 +234,7 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 	private function set_status( $args, $status, $success ) {
 		$comment = $this->fetcher->get_check( $args[0] );
 
-		$r = wp_set_comment_status( $comment->comment_ID, 'approve', true );
+		$r = wp_set_comment_status( $comment->comment_ID, $status, true );
 
 		if ( is_wp_error( $r ) ) {
 			WP_CLI::error( $r );
@@ -307,7 +344,7 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 	 *
 	 * ## OPTIONS
 	 *
-	 * <post-id>
+	 * [<post-id>]
 	 * : The ID of the post to count comments in.
 	 *
 	 * ## EXAMPLES
@@ -371,10 +408,10 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 			WP_CLI::success( "Comment with ID $args[0] exists." );
 		}
 	}
-	
+
 	/**
 	 * Get comment url
-	 * 
+	 *
 	 * ## OPTIONS
 	 *
 	 * <id>...
@@ -389,5 +426,33 @@ class Comment_Command extends \WP_CLI\CommandWithDBObject {
 	}
 }
 
+/**
+ * Manage comment custom fields.
+ *
+ * ## OPTIONS
+ *
+ * --format=json
+ * : Encode/decode values as JSON.
+ *
+ * ## EXAMPLES
+ *
+ *     wp comment meta set 123 description "Mary is a WordPress developer."
+ */
+class Comment_Meta_Command extends \WP_CLI\CommandWithMeta {
+	protected $meta_type = 'comment';
+
+	/**
+	 * Check that the comment ID exists
+	 *
+	 * @param int
+	 */
+	protected function check_object_id( $object_id ) {
+		$fetcher = new \WP_CLI\Fetchers\Comment;
+		$comment = $fetcher->get_check( $object_id );
+		return $comment->comment_ID;
+	}
+}
+
 WP_CLI::add_command( 'comment', 'Comment_Command' );
+WP_CLI::add_command( 'comment meta', 'Comment_Meta_Command' );
 
